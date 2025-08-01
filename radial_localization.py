@@ -12,7 +12,7 @@ import seaborn as sns
 from itertools import combinations
 
 #=================================================================================
-#functions
+#Define functions
 def quantify_radial_intensity(IMG, Mask):
     dz = 2.0
     dx = 0.325
@@ -79,16 +79,74 @@ def fit_st_line(x,y):
     y_fit = m*x + c
     return(m,c,y_fit)
 
+def sampwithrepl(dataset1, dataset2, samplenumb=1000):
+    mu1 = np.mean(dataset1)
+    mu2 = np.mean(dataset2)
+    mudiff = mu1 - mu2
+    mu_diff_sample_array = np.zeros(samplenumb)
+    dataset1_len = len(dataset1)
+    dataset2_len = len(dataset2)
+
+    for i in range(samplenumb):
+        sample1 = np.random.choice(dataset1, size=dataset1_len, replace=True)
+        sample2 = np.random.choice(dataset2, size=dataset2_len, replace=True)
+        mu_diff_sample_array[i] = np.mean(sample1) - np.mean(sample2)
+    return mu_diff_sample_array, mudiff
+
+def prettypvalue(pvalue):
+    pvalstring = str(pvalue)
+    splitatdot = pvalstring.split(".")
+    if "e" in pvalstring:
+        splitate = splitatdot[1].split("e")
+        onlytwovalues = splitate[0][0:2]
+        pvaluereport = splitatdot[0] + "." + onlytwovalues + "x10^" + splitate[1]
+    else:
+        onlytwovalues = splitatdot[1][0:5]
+        pvaluereport = splitatdot[0] + "." + onlytwovalues
+    return pvaluereport
+
+def sampwithrepl_plot(dataset1, dataset2, samplenumb=100000):
+    from scipy.stats import norm
+    import matplotlib.pyplot as plt
+
+    mu_diff_sample_array, mudiff = sampwithrepl(dataset1, dataset2, samplenumb)
+    mu_mu_diff_sample_array = np.mean(mu_diff_sample_array)
+    stdev = np.std(mu_diff_sample_array)
+    conf_right = mu_mu_diff_sample_array + (2 * stdev)
+    conf_left = mu_mu_diff_sample_array - (2 * stdev)
+
+    # Two-tailed p-value
+    cdf_zero = norm.cdf(0, loc=mu_mu_diff_sample_array, scale=stdev)
+    pvalue = 1 - cdf_zero if mudiff <= 0 else cdf_zero
+
+    # Plot histogram
+    y, x = np.histogram(mu_diff_sample_array, bins=30)
+    x_centers = 0.5 * (x[1:] + x[:-1])
+    fig, ax = plt.subplots()
+    ax.plot(x_centers, y)
+    ax.axvline(x=mudiff, color='rebeccapurple', label='Observed Δμ')
+    ax.axvline(x=conf_right, color='pink', linestyle='--', label='95% CI')
+    ax.axvline(x=conf_left, color='pink', linestyle='--')
+    ax.legend()
+    plt.show()
+
+    pvaluereport = prettypvalue(pvalue)
+    print('_' * 50)
+    print('    Δμ      CI95%(L)      CI95%(R)      p-value')
+    print('_' * 50)
+    print(f"  {np.round(mudiff,2)}    {np.round(conf_left,2)}    {np.round(conf_right,2)}    {pvaluereport}")
+    print('_' * 50)
+    return mudiff, conf_right, conf_left, pvalue
+
 #=====================================================================================
-#set directory
+#Set directory
 base = 'embryos_HAloc_20250130/'
 Files = os.listdir(base)
 
 # Define genotype categories and initialize output containers
-genotype_tags = ["Dm1234", "Dv1234", "OreR", "Dvir", "Dm123Dv4"]
 genotype_outputs = {}
 
-#call the quantify radial intensity function
+#Call the quantify radial intensity function
 for tag in genotype_tags:
     matching_files = [f for f in Files if tag in f and f.endswith('.tif')]
     output = np.zeros((len(matching_files), 20))
@@ -114,6 +172,8 @@ for tag in genotype_tags:
 # Load data
 slopes_dict = {}
 data_dict = {}
+genotype_tags = ["Dm1234", "Dv1234", "OreR", "Dvir", "Dm123Dv4"]
+
 
 for tag in genotype_tags:
     data = np.load(f'{tag}_Out_erosion.npy')
@@ -189,10 +249,11 @@ plt.savefig('Dmel_Dvir_OreR_Dm123Dv4_radial.png', bbox_inches='tight', dpi=600)
 plt.show()
 
 #=================================================================================
-#statistical analysis
+#Statistical analysis -- Pairwise bootstrap comparisons
+genotype_tags = ["Dm1234", "Dv1234", "OreR", "Dvir", "Dm123Dv4"]
 pairs = list(combinations(genotype_tags, 2))
 
 for g1, g2 in pairs:
-    U, p = mannwhitneyu(slopes_dict[g1], slopes_dict[g2], alternative='two-sided')
-    print(f"{g1} vs {g2}: U = {U:.1f}, p = {p:.4g}")
+    print(f"\nBootstrapping comparison: {g1} vs {g2}")
+    sampwithrepl_plot(slopes_dict[g1], slopes_dict[g2], samplenumb=100000)
     
