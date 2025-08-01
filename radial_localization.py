@@ -7,9 +7,12 @@ import cv2
 from skimage import filters
 import os
 from scipy.optimize import curve_fit 
-from scipy.stats import mannwhitneyu
 import seaborn as sns
 from itertools import combinations
+from tifffile import imread
+from scipy.ndimage import binary_erosion
+
+
 
 #=================================================================================
 #Define functions
@@ -142,6 +145,8 @@ def sampwithrepl_plot(dataset1, dataset2, samplenumb=100000):
 #Set directory
 base = 'embryos_HAloc_20250130/'
 Files = os.listdir(base)
+genotype_tags = ["Dm1234", "Dv1234", "OreR", "Dvir", "Dm123Dv4"]
+
 
 # Define genotype categories and initialize output containers
 genotype_outputs = {}
@@ -256,4 +261,5 @@ pairs = list(combinations(genotype_tags, 2))
 for g1, g2 in pairs:
     print(f"\nBootstrapping comparison: {g1} vs {g2}")
     sampwithrepl_plot(slopes_dict[g1], slopes_dict[g2], samplenumb=100000)
+    
     
